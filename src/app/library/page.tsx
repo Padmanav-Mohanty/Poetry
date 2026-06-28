@@ -1,11 +1,11 @@
 "use client"
 
-import { useMemo, useState, Suspense } from "react"
+import { useEffect, useMemo, useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { Search, LayoutGrid, List } from "lucide-react"
-import { poems, poetryForms } from "@/data/poems"
 import PoemCard from "@/components/PoemCard"
 import Link from "next/link"
+import { Poem, PoetryForm } from "@/types"
 
 type SortOption = "newest" | "popular" | "title"
 
@@ -13,10 +13,26 @@ function LibraryContent() {
   const searchParams = useSearchParams()
   const initialForm = searchParams.get("form") ?? ""
 
+  const [poems, setPoems] = useState<Poem[]>([])
+  const [poetryForms, setPoetryForms] = useState<PoetryForm[]>([])
+  const [loading, setLoading] = useState(true)
+
   const [query, setQuery] = useState("")
   const [form, setForm] = useState(initialForm)
   const [sort, setSort] = useState<SortOption>("newest")
   const [view, setView] = useState<"grid" | "list">("grid")
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/poems").then((r) => r.json()),
+      fetch("/api/forms").then((r) => r.json()),
+    ])
+      .then(([poemsData, formsData]) => {
+        setPoems(poemsData.poems ?? [])
+        setPoetryForms(formsData.forms ?? [])
+      })
+      .finally(() => setLoading(false))
+  }, [])
 
   const filtered = useMemo(() => {
     let result = poems.filter((p) => {
@@ -34,7 +50,7 @@ function LibraryContent() {
     })
 
     return result
-  }, [query, form, sort])
+  }, [poems, query, form, sort])
 
   return (
     <div className="px-6 md:px-10 py-16" style={{ background: "var(--offwhite)" }}>
@@ -119,60 +135,62 @@ function LibraryContent() {
       </div>
 
       <p className="text-sm mb-6" style={{ color: "var(--muted)" }}>
-        {filtered.length} {filtered.length === 1 ? "poem" : "poems"} found
+        {loading ? "Loading…" : `${filtered.length} ${filtered.length === 1 ? "poem" : "poems"} found`}
       </p>
 
-      {filtered.length === 0 && (
+      {!loading && filtered.length === 0 && (
         <div className="text-center py-20" style={{ color: "var(--muted)" }}>
           No poems match your search.
         </div>
       )}
 
-      {view === "grid" ? (
-        <div
-          className="grid gap-x-6 gap-y-10"
-          style={{
-            gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-            "--card-fg": "var(--ink)",
-            "--card-muted": "var(--muted)",
-          } as React.CSSProperties}
-        >
-          {filtered.map((poem) => (
-            <PoemCard key={poem.id} poem={poem} />
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {filtered.map((poem) => (
-            <Link
-              href={`/poem/${poem.slug}`}
-              key={poem.id}
-              className="flex gap-5 items-center bg-white border rounded-lg p-4 transition-colors hover:border-[var(--amber)]"
-              style={{ borderColor: "var(--border)" }}
-            >
-              <div
-                className="w-14 h-20 rounded-sm flex-shrink-0"
-                style={{
-                  background: `linear-gradient(135deg, ${poem.coverColor[0]}, ${poem.coverColor[1]}, ${poem.coverColor[2]})`,
-                }}
-              />
-              <div className="flex-1">
-                <h4 className="font-display font-bold" style={{ color: "var(--ink)" }}>
-                  {poem.title}
-                </h4>
-                <p className="text-sm" style={{ color: "var(--muted)" }}>
-                  {poem.author}
-                </p>
-              </div>
-              <span
-                className="text-[0.65rem] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-sm whitespace-nowrap"
-                style={{ background: "rgba(200,131,42,0.15)", color: "var(--amber)" }}
+      {!loading && (
+        view === "grid" ? (
+          <div
+            className="grid gap-x-6 gap-y-10"
+            style={{
+              gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+              "--card-fg": "var(--ink)",
+              "--card-muted": "var(--muted)",
+            } as React.CSSProperties}
+          >
+            {filtered.map((poem) => (
+              <PoemCard key={poem.id} poem={poem} />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {filtered.map((poem) => (
+              <Link
+                href={`/poem/${poem.slug}`}
+                key={poem.id}
+                className="flex gap-5 items-center bg-white border rounded-lg p-4 transition-colors hover:border-[var(--amber)]"
+                style={{ borderColor: "var(--border)" }}
               >
-                {poem.form}
-              </span>
-            </Link>
-          ))}
-        </div>
+                <div
+                  className="w-14 h-20 rounded-sm flex-shrink-0"
+                  style={{
+                    background: `linear-gradient(135deg, ${poem.coverColor[0]}, ${poem.coverColor[1]}, ${poem.coverColor[2]})`,
+                  }}
+                />
+                <div className="flex-1">
+                  <h4 className="font-display font-bold" style={{ color: "var(--ink)" }}>
+                    {poem.title}
+                  </h4>
+                  <p className="text-sm" style={{ color: "var(--muted)" }}>
+                    {poem.author}
+                  </p>
+                </div>
+                <span
+                  className="text-[0.65rem] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-sm whitespace-nowrap"
+                  style={{ background: "rgba(200,131,42,0.15)", color: "var(--amber)" }}
+                >
+                  {poem.form}
+                </span>
+              </Link>
+            ))}
+          </div>
+        )
       )}
     </div>
   )

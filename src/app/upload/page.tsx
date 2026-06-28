@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { UploadCloud, CheckCircle2, ArrowRight, PenLine } from "lucide-react"
+import { UploadCloud, CheckCircle2, ArrowRight, PenLine, Loader2 } from "lucide-react"
 
 const FORMS = [
   "Free Verse",
@@ -23,7 +23,10 @@ export default function UploadPage() {
   const [poemText, setPoemText] = useState("")
   const [dragOver, setDragOver] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [toastIsError, setToastIsError] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
 
   const handleFile = (f: File | null) => {
     if (!f) return
@@ -32,13 +35,45 @@ export default function UploadPage() {
 
   const hasContent = mode === "write" ? poemText.trim().length > 0 : !!file
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const showToast = (message: string, isError = false) => {
+    setToast(message)
+    setToastIsError(isError)
+    setTimeout(() => setToast(null), 5000)
+  }
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setToast("🪶 Your poem has been submitted! It will appear in the anthology shortly.")
-    setFile(null)
-    setPoemText("")
-    if (inputRef.current) inputRef.current.value = ""
-    setTimeout(() => setToast(null), 4000)
+    if (submitting) return
+
+    const formEl = e.currentTarget
+    const fd = new FormData(formEl)
+    fd.set("mode", mode)
+    if (mode === "write") {
+      fd.set("content", poemText)
+    } else if (file) {
+      fd.set("file", file)
+    }
+
+    setSubmitting(true)
+    try {
+      const res = await fetch("/api/submit", { method: "POST", body: fd })
+      const data = await res.json()
+
+      if (!res.ok) {
+        showToast(data.error ?? "Something went wrong submitting your poem.", true)
+        return
+      }
+
+      showToast("🪶 " + data.message)
+      setFile(null)
+      setPoemText("")
+      if (inputRef.current) inputRef.current.value = ""
+      formEl.reset()
+    } catch {
+      showToast("Network error — please try again.", true)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -57,6 +92,9 @@ export default function UploadPage() {
         </h1>
         <p className="font-serif-body" style={{ color: "var(--muted)" }}>
           No gatekeepers. No algorithms. Just your words, your readers.
+        </p>
+        <p className="text-xs mt-3" style={{ color: "var(--muted)" }}>
+          Submissions are reviewed before they appear in the anthology.
         </p>
 
         {/* Mode toggle */}
@@ -155,7 +193,7 @@ export default function UploadPage() {
                 or click to browse your files
               </p>
               <div className="text-xs tracking-wide" style={{ color: "#B0A89E" }}>
-                PDF · EPUB · TXT — up to 50MB
+                PDF · TXT — up to 50MB (EPUB support coming soon)
               </div>
             </div>
 
@@ -179,7 +217,7 @@ export default function UploadPage() {
         )}
 
         {hasContent && (
-          <form onSubmit={handleSubmit} className="mt-8 text-left">
+          <form ref={formRef} onSubmit={handleSubmit} className="mt-8 text-left">
             <div className="grid md:grid-cols-2 gap-4 mb-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
@@ -187,6 +225,7 @@ export default function UploadPage() {
                 </label>
                 <input
                   type="text"
+                  name="title"
                   required
                   placeholder="e.g. What the River Keeps"
                   className="px-4 py-2.5 rounded-md border text-sm outline-none"
@@ -199,6 +238,7 @@ export default function UploadPage() {
                 </label>
                 <input
                   type="text"
+                  name="author"
                   required
                   placeholder="Your name or pen name"
                   className="px-4 py-2.5 rounded-md border text-sm outline-none"
@@ -213,6 +253,7 @@ export default function UploadPage() {
                   Form
                 </label>
                 <select
+                  name="form"
                   required
                   defaultValue=""
                   className="px-4 py-2.5 rounded-md border text-sm outline-none bg-white"
@@ -233,6 +274,7 @@ export default function UploadPage() {
                   Language
                 </label>
                 <select
+                  name="language"
                   defaultValue="English"
                   className="px-4 py-2.5 rounded-md border text-sm outline-none bg-white"
                   style={{ borderColor: "var(--border)", color: "var(--ink)" }}
@@ -246,11 +288,12 @@ export default function UploadPage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-1.5 mb-6">
+            <div className="flex flex-col gap-1.5 mb-4">
               <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
                 Description
               </label>
               <textarea
+                name="description"
                 required
                 placeholder="A short note about your poem — what inspired it, what it's about."
                 className="px-4 py-3 rounded-md border text-sm outline-none min-h-[100px] resize-y"
@@ -258,13 +301,36 @@ export default function UploadPage() {
               />
             </div>
 
+            <div className="flex flex-col gap-1.5 mb-6">
+              <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
+                Email <span style={{ fontWeight: 400, textTransform: "none" }}>(optional, for review updates)</span>
+              </label>
+              <input
+                type="email"
+                name="email"
+                placeholder="you@example.com"
+                className="px-4 py-2.5 rounded-md border text-sm outline-none"
+                style={{ borderColor: "var(--border)", color: "var(--ink)" }}
+              />
+            </div>
+
             <button
               type="submit"
-              className="w-full flex items-center justify-center gap-2 px-8 py-3.5 rounded font-semibold text-sm transition-transform hover:-translate-y-0.5"
+              disabled={submitting}
+              className="w-full flex items-center justify-center gap-2 px-8 py-3.5 rounded font-semibold text-sm transition-transform hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
               style={{ background: "var(--amber)", color: "var(--dark-bg)" }}
             >
-              Publish to Verse
-              <ArrowRight size={16} />
+              {submitting ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Submitting…
+                </>
+              ) : (
+                <>
+                  Submit for Review
+                  <ArrowRight size={16} />
+                </>
+              )}
             </button>
           </form>
         )}
@@ -274,9 +340,9 @@ export default function UploadPage() {
         <div
           className="fixed bottom-8 right-8 max-w-xs px-6 py-4 rounded-lg text-sm font-medium z-[500]"
           style={{
-            background: "#1E1A16",
+            background: toastIsError ? "#7A1F1F" : "#1E1A16",
             color: "var(--paper)",
-            borderLeft: "4px solid var(--amber)",
+            borderLeft: `4px solid ${toastIsError ? "#E0716B" : "var(--amber)"}`,
           }}
         >
           {toast}

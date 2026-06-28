@@ -1,14 +1,27 @@
 import Link from "next/link"
 import { ArrowRight, Feather, Sparkles } from "lucide-react"
-import { poems, poetryForms } from "@/data/poems"
+import { getApprovedPoems, getPoetryForms } from "@/lib/poems-server"
 import PoemCard from "@/components/PoemCard"
 import AnimatedCounter from "@/components/AnimatedCounter"
 
-export default function HomePage() {
+// Poems are added/approved at runtime via the moderation queue, so this page
+// is rendered dynamically rather than statically generated at build time.
+export const dynamic = "force-dynamic"
+
+export default async function HomePage() {
+  const [poems, poetryForms] = await Promise.all([getApprovedPoems(), getPoetryForms()])
   const featured = poems.find((p) => p.featured) ?? poems[0]
   const recent = [...poems]
     .sort((a, b) => +new Date(b.uploadedAt) - +new Date(a.uploadedAt))
     .slice(0, 8)
+
+  if (!featured) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-6 text-center" style={{ background: "var(--dark-bg)", color: "var(--paper)" }}>
+        <p className="font-serif-body">No poems yet — be the first to share one.</p>
+      </div>
+    )
+  }
 
   return (
     <>

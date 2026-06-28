@@ -1,18 +1,32 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { notFound, useParams } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
-import { poems } from "@/data/poems"
+import { Poem } from "@/types"
 
 export default function ReaderPage() {
   const params = useParams<{ slug: string }>()
-  const poem = useMemo(() => poems.find((p) => p.slug === params.slug), [params.slug])
-
+  const [poem, setPoem] = useState<Poem | null | undefined>(undefined) // undefined = loading
   const [fontSize, setFontSize] = useState(1.15)
   const [progress, setProgress] = useState(0)
   const contentRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/poems/${params.slug}`)
+      .then((res) => (res.ok ? res.json() : Promise.resolve({ poem: null })))
+      .then((data) => {
+        if (!cancelled) setPoem(data.poem ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setPoem(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [params.slug])
 
   useEffect(() => {
     const el = contentRef.current
@@ -24,7 +38,15 @@ export default function ReaderPage() {
     el.addEventListener("scroll", onScroll)
     onScroll()
     return () => el.removeEventListener("scroll", onScroll)
-  }, [])
+  }, [poem])
+
+  if (poem === undefined) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center" style={{ background: "var(--paper)" }}>
+        <p className="font-serif-body" style={{ color: "var(--muted)" }}>Loading…</p>
+      </div>
+    )
+  }
 
   if (!poem) notFound()
 

@@ -1,18 +1,19 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowRight, ArrowLeft, Users, AlignLeft } from "lucide-react"
-import { poems } from "@/data/poems"
+import { getApprovedPoemBySlug } from "@/lib/poems-server"
 
-export function generateStaticParams() {
-  return poems.map((poem) => ({ slug: poem.slug }))
-}
+// Poems are added/approved at runtime (via the moderation queue), not at
+// build time, so this page is rendered dynamically rather than statically
+// pre-generated. `revalidate = 0` (the default for dynamic) keeps it fresh.
+export const dynamic = "force-dynamic"
 
-export default function PoemDetailPage({
+export default async function PoemDetailPage({
   params,
 }: {
   params: { slug: string }
 }) {
-  const poem = poems.find((p) => p.slug === params.slug)
+  const poem = await getApprovedPoemBySlug(params.slug)
   if (!poem) notFound()
 
   return (
